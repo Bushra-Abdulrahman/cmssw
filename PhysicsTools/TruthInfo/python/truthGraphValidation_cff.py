@@ -41,6 +41,11 @@ branchHGCalValidator = DQMEDAnalyzer(
     maxEta=cms.double(3.0),
 )
 
+MyTauGraphValidation = DQMEDAnalyzer(
+    "MyTauGraphValidator",
+    src=cms.InputTag("truthLogicalGraphProducer"),
+)
+
 # Tracker counterpart. A TrackingParticle has no hits of its own, so the
 # Branch<->TrackingParticle comparison is mediated by the reco track: the
 # association producer matches reco tracks to branches by shared tracker simhits,
@@ -160,6 +165,8 @@ truthGraphValidationProducers = cms.Sequence(
 truthGraphValidationAnalyzers = cms.Sequence(
     branchHGCalValidator
     + branchTrackingValidator
+    + MyTauGraphValidation
+
 )
 
 # EXPERIMENTAL, opt-in (NOT in the default sequence): the generic reco-side

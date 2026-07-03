@@ -489,8 +489,10 @@ void BranchHGCalValidator::analyze(edm::Event const& event, edm::EventSetup cons
   // raw response can normalise a Branch's energy by the object's own hit energy.
   std::unordered_map<uint32_t, float> cellSimEnergy;
   for (uint32_t p = 0; p < hitIndex.nParticles(); ++p)
-    for (auto const& hit : hitIndex.directHits(truth::HitChannel::HGCalCalo, p))
+    for (auto const& hit : hitIndex.directHits(truth::HitChannel::HGCalCalo, p)) {
       cellSimEnergy[hit.detId] += hit.energy;
+      std::cout  << "hit.detId = " << hit.detId << ", hit.energy = "<< hit.energy << std::endl;
+    }
   const auto recHitEnergyByDetId = collectRecHitEnergyByDetId(event);
 
   validate(event.get(caloParticleToken_),
