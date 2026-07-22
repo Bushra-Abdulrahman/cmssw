@@ -58,6 +58,18 @@
   <flags EDM_PLUGIN="1"/>
 </library>
 
+<library file="MyTruthGraphAnalyzer.cc" name="MyTruthGraphAnalyzerPlugins">
+  <flags EDM_PLUGIN="1"/>
+
+  <use name="FWCore/Framework"/>
+  <use name="FWCore/ParameterSet"/>
+  <use name="FWCore/ServiceRegistry"/>
+  <use name="FWCore/Utilities"/>
+  <use name="CommonTools/UtilAlgos"/>
+  <use name="SimDataFormats/TruthInfo"/>
+  <use name="root"/>
+</library>
+
 <library file="TruthGraphAccumulator.cc" name="TruthGraphAccumulatorPlugins">
   <flags EDM_PLUGIN="1"/>
 </library>
