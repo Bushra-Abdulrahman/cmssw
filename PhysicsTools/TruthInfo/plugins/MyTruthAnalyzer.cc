@@ -32,6 +32,9 @@
 #include "DataFormats/HGCRecHit/interface/HGCRecHitCollections.h"
 #include "DataFormats/HcalRecHit/interface/HcalRecHitCollections.h"
 
+#include "DataFormats/HGCalReco/interface/TICLCandidate.h"
+#include "SimDataFormats/Associations/interface/TICLAssociationMap.h"
+
 class MyTruthAnalyzer : public edm::one::EDAnalyzer<> {
 public:
     explicit MyTruthAnalyzer(edm::ParameterSet const&);
@@ -50,6 +53,11 @@ private:
     
     const edm::EDGetTokenT<truth::Graph> graphToken_;
     const edm::EDGetTokenT<truth::LogicalGraphHitIndex> hitIndexToken_;
+    const edm::EDGetTokenT<std::vector<ticl::Trackster>> trackstersToken_;
+    const edm::EDGetTokenT<ticl::AssociationMap<ticl::mapWithSharedEnergyAndScore>> truthToTracksterToken_;
+    const edm::EDGetTokenT<ticl::AssociationMap<ticl::mapWithSharedEnergyAndScore>> tracksterToTruthAdaptiveNominalToken_; //nominal
+    const edm::EDGetTokenT<ticl::AssociationMap<ticl::mapWithSharedEnergyAndScore>> tracksterToTruthAdaptiveTightToken_; //tight
+    const edm::EDGetTokenT<ticl::AssociationMap<ticl::mapWithSharedEnergyAndScore>> tracksterToTruthAdaptiveLooseToken_; //loose
     const edm::EDGetTokenT<EcalRecHitCollection> ecalRecHitsToken_;
     const edm::EDGetTokenT<HBHERecHitCollection> hcalRecHitsToken_;
 
@@ -63,7 +71,7 @@ private:
     //DYtoLL
     mutable int totZ = 0, totZToEle = 0, totZToMu = 0, totZToTau = 0, totZToNot2Particles = 0, totZToNot2Leptons = 0, totZTo1Particle = 0;
 
-
+    mutable int match0t2 = 0, match2t4 = 0, match4t6 = 0, match6t8 = 0, match8t10 = 0, allmatched = 0;
 };
 
 
@@ -71,6 +79,11 @@ MyTruthAnalyzer::MyTruthAnalyzer(edm::ParameterSet const& cfg)
         : histContainer_(),
           graphToken_(consumes<truth::Graph>(cfg.getParameter<edm::InputTag>("src"))),
           hitIndexToken_(consumes<truth::LogicalGraphHitIndex>(cfg.getParameter<edm::InputTag>("hitIndex"))),
+          trackstersToken_(consumes<std::vector<ticl::Trackster>>(cfg.getParameter<edm::InputTag>("tracksters"))),
+          truthToTracksterToken_(consumes<ticl::AssociationMap<ticl::mapWithSharedEnergyAndScore>>(cfg.getParameter<edm::InputTag>("truthToTrackster"))),
+          tracksterToTruthAdaptiveNominalToken_(consumes<ticl::AssociationMap<ticl::mapWithSharedEnergyAndScore>>(cfg.getParameter<edm::InputTag>("tracksterToTruthAdaptiveNominal"))),
+          tracksterToTruthAdaptiveTightToken_(consumes<ticl::AssociationMap<ticl::mapWithSharedEnergyAndScore>>(cfg.getParameter<edm::InputTag>("tracksterToTruthAdaptiveTight"))),
+          tracksterToTruthAdaptiveLooseToken_(consumes<ticl::AssociationMap<ticl::mapWithSharedEnergyAndScore>>(cfg.getParameter<edm::InputTag>("tracksterToTruthAdaptiveLoose"))),
           ecalRecHitsToken_(consumes<EcalRecHitCollection>(cfg.getParameter<edm::InputTag>("ecalRecHits"))),
           hcalRecHitsToken_(consumes<HBHERecHitCollection>(cfg.getParameter<edm::InputTag>("hcalRecHits"))),
           doTenTau(cfg.getParameter<bool>("doTenTau")),
@@ -150,7 +163,41 @@ void MyTruthAnalyzer::beginJob() {
 
         histContainer2D_["TauEResponseVsEta"] = fs->make<TH2F>("TauEResponseVsEta", "TauEResponseVsEta", 100, -5, 5, 100, 0, 2);
         histContainer2D_["TauEResponseVsPt"] = fs->make<TH2F>("TauEResponseVsPt", "TauEResponseVsPt", 100, 0, 500, 100, 0, 2);
+
+        //for the taus decaying to 1 charge pion + 1 neutral pion
+        histContainer2D_["1ProngBFECALVsEta"] = fs->make<TH2F>("1ProngBFECALVsEta", "1ProngBFECALVsEta", 100, -5, 5, 100, 0, 1);
+        histContainer2D_["1ProngBFHCALVsEta"] = fs->make<TH2F>("1ProngBFHCALVsEta", "1ProngBFHCALVsEta", 100, -5, 5, 100, 0, 1);
+        histContainer2D_["1ProngECALoverHCALVsEta"] = fs->make<TH2F>("1ProngECALoverHCALVsEta", "1ProngECALoverHCALVsEta", 100, -5, 5, 500, 0, 5);
+        histContainer2D_["1ProngBFECALVsPt"] = fs->make<TH2F>("1ProngBFECALVsPt", "1ProngBFECALVsPt", 1000, 0, 500, 100, 0, 1);
+        histContainer2D_["1ProngBFHCALVsPt"] = fs->make<TH2F>("1ProngBFHCALVsPt", "1ProngBFHCALVsPt", 1000, 0, 500, 100, 0, 1);
+        histContainer2D_["1ProngECALoverHCALVsPt"] = fs->make<TH2F>("1ProngECALoverHCALVsPt", "1ProngECALoverHCALVsPt", 1000, 0, 500, 500, 0, 5);
+        
+        histContainer2D_["1Pi0BFECALVsEta"] = fs->make<TH2F>("1Pi0BFECALVsEta", "1Pi0BFECALVsEta", 100, -5, 5, 100, 0, 1);
+        histContainer2D_["1Pi0BFHCALVsEta"] = fs->make<TH2F>("1Pi0BFHCALVsEta", "1Pi0BFHCALVsEta", 100, -5, 5, 100, 0, 1);
+        histContainer2D_["1Pi0ECALoverHCALVsEta"] = fs->make<TH2F>("1Pi0ECALoverHCALVsEta", "1Pi0ECALoverHCALVsEta", 100, -5, 5, 5000, 0, 500);
+        histContainer2D_["1Pi0BFECALVsPt"] = fs->make<TH2F>("1Pi0BFECALVsPt", "1Pi0BFECALVsPt", 1000, 0, 500, 100, 0, 1);
+        histContainer2D_["1Pi0BFHCALVsPt"] = fs->make<TH2F>("1Pi0BFHCALVsPt", "1Pi0BFHCALVsPt", 1000, 0, 500, 100, 0, 1);
+        histContainer2D_["1Pi0ECALoverHCALVsPt"] = fs->make<TH2F>("1Pi0ECALoverHCALVsPt", "1Pi0ECALoverHCALVsPt", 1000, 0, 500, 5000, 0, 500);
+
+        //Associator
+        histContainer_["AssociationScoreOfPionBestMatch"] = fs->make<TH1F>("AssociationScoreOfPionBestMatch", "AssociationScoreOfPionBestMatch", 100, 0, 1);
+        histContainer2D_["AssociationScoreOfPionBestMatchVsEta"] = fs->make<TH2F>("AssociationScoreOfPionBestMatchVsEta", "AssociationScoreOfPionBestMatchVsEta", 100, -5, 5, 1000, 0, 1);
+        histContainer2D_["AssociationScoreOfPionBestMatchVsPt"] = fs->make<TH2F>("AssociationScoreOfPionBestMatchVsPt", "AssociationScoreOfPionBestMatchVsPt", 1000, 0, 500, 1000, 0, 1);
+
+        histContainer_["TruthPionPtAll"] = fs->make<TH1F>("TruthPionPtAll", "TruthPionPtAll", 100, 0, 100);
+        histContainer_["TruthPionPtMatched"] = fs->make<TH1F>("TruthPionPtMatched", "TruthPionPtMatched", 100, 0, 100);
+        histContainer_["TruthToRecoEfficiency"] = fs->make<TH1F>("TruthToRecoEfficiency", "Truth to Reco Efficiency;Truth pion p_{T} [GeV];Efficiency", 100, 0, 100);
+
+        histContainer_["TrackesterToPionBestMatchNominal"] = fs->make<TH1F>("TrackesterToPionBestMatchNominal", "TrackesterToPionBestMatchNominal", 100, 0, 1);
+        histContainer_["TrackesterToPionBestMatchTight"] = fs->make<TH1F>("TrackesterToPionBestMatchTight", "TrackesterToPionBestMatchTight", 100, 0, 1);
+        histContainer_["TrackesterToPionBestMatchLoose"] = fs->make<TH1F>("TrackesterToPionBestMatchLoose", "TrackesterToPionBestMatchLoose", 100, 0, 1);
+
+        histContainer_["TracksterPtAll"] = fs->make<TH1F>("TracksterPtAll", "TracksterPtAll", 100, 0, 100);
+        histContainer_["TracksterPtMatched"] = fs->make<TH1F>("TracksterPtMatched", "TracksterPtMatched", 100, 0, 100);
+        histContainer_["RecoToTruthEfficiency"] = fs->make<TH1F>("RecoToTruthEfficiency", "Reco to Truth  Efficiency;Trackster p_{T} [GeV];Efficiency", 100, 0, 100);
+
     }
+
 
     if(doDYtoLL)
     {
@@ -174,6 +221,20 @@ void MyTruthAnalyzer::analyze(edm::Event const& event, edm::EventSetup const&) {
         auto const& graph = event.get(graphToken_);
         auto const& hitIndex  = event.get(hitIndexToken_);
         truth::SubgraphHitView subgraphHitView(hitIndex);
+        //associators
+        auto const& tracksters = event.get(trackstersToken_);
+        auto const& associationProduct = event.get(truthToTracksterToken_);
+        auto const& pionToTrackster = associationProduct.getMap();
+
+        auto const& nominalProduct = event.get(tracksterToTruthAdaptiveNominalToken_);
+        auto const& nominalMap = nominalProduct.getMap();
+
+        auto const& tightProduct = event.get(tracksterToTruthAdaptiveTightToken_);
+        auto const& tightMap = tightProduct.getMap();
+
+        auto const& looseProduct = event.get(tracksterToTruthAdaptiveLooseToken_);
+        auto const& looseMap = looseProduct.getMap();
+
 
     if(doTenTau)
     {
@@ -407,9 +468,365 @@ void MyTruthAnalyzer::analyze(edm::Event const& event, edm::EventSetup const&) {
                 histContainer2D_["TauEResponseVsEta"]->Fill(p.momentum().eta(), response);
                 histContainer2D_["TauEResponseVsPt"]->Fill(p.momentum().pt(), response);
             }
+
+
+
+            //for tau ----> 1pion + neutrino
+            int nProng = 0, nPi0 = 0;
+            bool is1Prong1Pi0 = false;
+            std::vector<truth::Particle> kids = p.children();
+            for(const auto& kid : kids)
+            {
+                if(!kid.valid()) continue;
+                if(std::abs(kid.pdgId()) == 13) break;    
+                if(std::abs(kid.pdgId()) == 11) break;
+                    
+                if(std::abs(kid.pdgId()) == 211) ++nProng;
+                if(std::abs(kid.pdgId()) == 111) ++nPi0;
+            }
+            if (nProng == 1 && nPi0 == 1) is1Prong1Pi0 = true;
+            if (is1Prong1Pi0)
+            {
+                for(const auto& kid : kids)
+                {
+                    if(!kid.valid()) continue;
+                    if(std::abs(kid.pdgId()) == 211)
+                    {
+                        double prongrecHitEnergy = 0.;
+                        double prongECALEnergy = 0.;
+                        double prongHCALEnergy = 0.;
+                        auto const prongcaloHits = subgraphHitView.subgraphHits(truth::HitChannel::Calo, kid.id());
+                        for (auto const& pronghit : prongcaloHits)
+                        {
+                            auto const recHit = recEnergyByDetId.find(pronghit.detId);
+                            DetId const detectorId(pronghit.detId);
+                            if (recHit != recEnergyByDetId.end()) {
+                                prongrecHitEnergy += recHit->second;
+                                if (detectorId.det() == 3 || detectorId.det() == 8)  prongECALEnergy += recHit->second;
+                                if (detectorId.det() == 4 || detectorId.det() == 9 || detectorId.det() == 10)  prongHCALEnergy += recHit->second;
+                            }
+                        }
+
+                        histContainer2D_["1ProngBFECALVsEta"]->Fill(kid.momentum().eta(), prongECALEnergy / prongrecHitEnergy);
+                        histContainer2D_["1ProngBFHCALVsEta"]->Fill(kid.momentum().eta(), prongHCALEnergy / prongrecHitEnergy);
+                        histContainer2D_["1ProngECALoverHCALVsEta"]->Fill(kid.momentum().eta(), prongECALEnergy / prongHCALEnergy);
+                        histContainer2D_["1ProngBFECALVsPt"]->Fill(kid.momentum().pt(), prongECALEnergy / prongrecHitEnergy);
+                        histContainer2D_["1ProngBFHCALVsPt"]->Fill(kid.momentum().pt(), prongHCALEnergy / prongrecHitEnergy);
+                        histContainer2D_["1ProngECALoverHCALVsPt"]->Fill(kid.momentum().pt(), prongECALEnergy / prongHCALEnergy);
+
+                    }
+
+                    if(std::abs(kid.pdgId()) == 111)
+                    {
+                        double pi0recHitEnergy = 0.;
+                        double pi0ECALEnergy = 0.;
+                        double pi0HCALEnergy = 0.;
+                        auto const pi0caloHits = subgraphHitView.subgraphHits(truth::HitChannel::Calo, kid.id());
+                        for (auto const& pi0hit : pi0caloHits)
+                        {
+                            auto const recHit = recEnergyByDetId.find(pi0hit.detId);
+                            DetId const detectorId(pi0hit.detId);
+                            if (recHit != recEnergyByDetId.end()) {
+                                pi0recHitEnergy += recHit->second;
+                                if (detectorId.det() == 3 || detectorId.det() == 8)  pi0ECALEnergy += recHit->second;
+                                if (detectorId.det() == 4 || detectorId.det() == 9 || detectorId.det() == 10)  pi0HCALEnergy += recHit->second;
+                            }
+                        }
+
+                        histContainer2D_["1Pi0BFECALVsEta"]->Fill(kid.momentum().eta(), pi0ECALEnergy / pi0recHitEnergy);
+                        histContainer2D_["1Pi0BFHCALVsEta"]->Fill(kid.momentum().eta(), pi0HCALEnergy / pi0recHitEnergy);
+                        histContainer2D_["1Pi0ECALoverHCALVsEta"]->Fill(kid.momentum().eta(), pi0ECALEnergy / pi0HCALEnergy);
+                        histContainer2D_["1Pi0BFECALVsPt"]->Fill(kid.momentum().pt(), pi0ECALEnergy / pi0recHitEnergy);
+                        histContainer2D_["1Pi0BFHCALVsPt"]->Fill(kid.momentum().pt(), pi0HCALEnergy / pi0recHitEnergy);
+                        histContainer2D_["1Pi0ECALoverHCALVsPt"]->Fill(kid.momentum().pt(), pi0ECALEnergy / pi0HCALEnergy);
+
+                    }
+                }
+
+            }//if (is1Prong1Pi0)
+
         }
 
 
+
+
+
+
+        //Associator Truth --> Trackster
+        for (truth::Particle pion : graph.particleViews()) 
+        {
+            if (!pion.valid())
+            continue;
+
+            if (std::abs(pion.pdgId()) != 211)
+            continue;
+
+            // Require the pion to originate from a tau decay.
+            if (!(pion.hasAncestorPdgId(15) || pion.hasAncestorPdgId(-15)))
+            continue;
+
+            // Offline TICL acceptance.
+            const double absEta = std::abs(pion.momentum().eta());
+            double pt = pion.momentum().pt();
+            histContainer_["TruthPionPtAll"]->Fill(pt);
+
+            if (absEta < 1.5 || absEta > 3.0)
+            continue;
+
+            const uint32_t pionId = pion.id();
+
+            if (pionId >= pionToTrackster.size()) {
+                std::cout << "Truth pion " << pionId << " is outside the association map\n";
+                continue;
+            }
+            
+            //matched tracksters vector 
+            auto const& tracksterMatches = pionToTrackster[pionId];
+
+            if (tracksterMatches.empty()) {
+                std::cout << "Truth pion " << pionId << " has no matched Trackster\n";
+                continue;
+            }
+
+            bool hasGoodMatch = false;
+            // Print all matched tracksters pt and eta
+            uint32_t besttracksterId = 0;
+            double bestscore = 2.;
+            double bestsharedEnergyFrac = 0.;
+            for (auto const& match : tracksterMatches) {
+
+                const uint32_t tracksterId = match.index();
+                const double score = match.score();
+                const double sharedEnergyFrac = match.value();
+
+                if (tracksterId >= tracksters.size()) {
+                    std::cout << "Trackster " << tracksterId << " is outside the Trackster collection\n";
+                    continue;
+                }
+
+                auto const& trackster = tracksters[tracksterId];
+
+                //std::cout << "Truth pion " << pionId
+                //          << " matched to Trackster " << tracksterId
+                //          << " with score " << score
+                //          << ", shared energy fraction " << sharedEnergyFrac
+                //          << ", pt = " << trackster.raw_pt()
+                //          << ", barycenter = " << trackster.barycenter() << "\n";
+
+                if (score < bestscore) 
+                {
+                    bestscore = score;
+                    besttracksterId = match.index();
+                    bestsharedEnergyFrac = match.value(); 
+                }
+                if(bestscore < 0.6)
+                    hasGoodMatch = true;
+
+            }
+            if(hasGoodMatch)
+                histContainer_["TruthPionPtMatched"]->Fill(pt);
+
+            auto const& besttrackster = tracksters[besttracksterId];
+            std::cout << "Truth pion " << pionId
+                      << " best matched to Trackster " << besttracksterId
+                      << " with score " << bestscore
+                      << ", shared energy fraction " << bestsharedEnergyFrac
+                      << ", pt = " << besttrackster.raw_pt()
+                      << ", barycenter = " << besttrackster.barycenter() << "\n";
+
+            //std::cout << "The score of best matches is " << bestscore << std::endl; 
+            histContainer_["AssociationScoreOfPionBestMatch"]->Fill(bestscore);
+            histContainer2D_["AssociationScoreOfPionBestMatchVsEta"]->Fill(pion.momentum().eta(), bestscore);
+            histContainer2D_["AssociationScoreOfPionBestMatchVsPt"]->Fill(pion.momentum().pt(), bestscore);
+
+            
+    }
+//Associator Trackster --> Truth
+
+//*********************************Nominal*********************** */
+            for (uint32_t tracksterId = 0; tracksterId < tracksters.size(); tracksterId++){
+                auto const& trackster = tracksters[tracksterId];
+
+                if (tracksterId >= nominalMap.size())
+                   continue;
+
+                auto const& truthMatches =
+                    nominalMap[tracksterId];
+
+                if (truthMatches.empty())
+                    continue;
+
+
+                bool hasGoodMatchReco = false;
+                double bestScore = 2.;
+                //uint32_t bestTruthPi = 0;
+                //double bestSharedE = 0.;
+                const double eta = trackster.barycenter().eta();
+                const double pt = trackster.raw_energy() / std::cosh(eta);
+                histContainer_["TruthPionPtAll"]->Fill(pt);
+
+                for (auto const& match : truthMatches){
+
+                    const uint32_t truthId = match.index();
+                    const double score = match.score();
+                    const double shared = match.value();
+
+                    auto const& truthParticle = graph.particle(truthId);
+
+                    if (!truthParticle.valid())
+                        continue;
+
+                    if (std::abs(truthParticle.pdgId()) != 211)
+                        continue;
+
+                    if (!(truthParticle.hasAncestorPdgId(15) ||
+                        truthParticle.hasAncestorPdgId(-15)))
+                        continue;
+
+                    
+                    const double eta = trackster.barycenter().eta();
+                    if (std::abs(eta) < 1.5 || std::abs(eta) > 3.0)
+                        continue;
+                    
+                    
+                    const double pt = trackster.raw_energy() / std::cosh(eta);
+                    histContainer_["TracksterPtAll"]->Fill(pt);
+
+                    allmatched++;
+
+                    if (score < bestScore){
+                        bestScore = score;
+                        //bestSharedE = match.value();
+                        //bestTruthPi = match.index();
+                    }
+                    if(bestScore < 0.2){
+                        hasGoodMatchReco = true;
+                        match0t2++;
+                    }else if(bestScore < 0.4){
+                        hasGoodMatchReco = true;
+                        match2t4++;
+                    }else if(bestScore < 0.6){
+                        hasGoodMatchReco = true;
+                        match4t6++;
+                    }else if(bestScore < 0.8){
+                        match6t8++;
+                    }else if(bestScore < 1){
+                        match8t10++;
+                    }
+                        
+
+            }
+            if(hasGoodMatchReco)
+                histContainer_["TracksterPtMatched"]->Fill(pt);
+
+            histContainer_["TrackesterToPionBestMatchNominal"]->Fill(bestScore);
+        }
+
+//*********************************Tight*********************** */
+            for (uint32_t tracksterId = 0; tracksterId < tracksters.size(); tracksterId++){
+                auto const& trackster = tracksters[tracksterId];
+
+                if (tracksterId >= tightMap.size())
+                   continue;
+
+                auto const& truthMatches =
+                    tightMap[tracksterId];
+
+                if (truthMatches.empty())
+                    continue;
+
+
+                double bestScore = 2.;
+                //uint32_t bestTruthPi = 0;
+                //double bestSharedE = 0.;
+
+                for (auto const& match : truthMatches){
+
+                    const uint32_t truthId = match.index();
+                    const double score = match.score();
+                    const double shared = match.value();
+
+                    auto const& truthParticle = graph.particle(truthId);
+
+                    if (!truthParticle.valid())
+                        continue;
+
+                    if (std::abs(truthParticle.pdgId()) != 211)
+                        continue;
+
+                    if (!(truthParticle.hasAncestorPdgId(15) ||
+                        truthParticle.hasAncestorPdgId(-15)))
+                        continue;
+
+                    const double absEta =
+                        std::abs(truthParticle.momentum().eta());
+
+                    if (absEta < 1.5 || absEta > 3.0)
+                        continue;
+                    
+
+                    if (score < bestScore){
+                        bestScore = score;
+                        //bestSharedE = match.value();
+                        //bestTruthPi = match.index();
+                    }
+
+            }
+            histContainer_["TrackesterToPionBestMatchTight"]->Fill(bestScore);
+        }
+
+        //*********************************Loose*********************** */
+            for (uint32_t tracksterId = 0; tracksterId < tracksters.size(); tracksterId++){
+                auto const& trackster = tracksters[tracksterId];
+
+                if (tracksterId >= looseMap.size())
+                   continue;
+
+                auto const& truthMatches =
+                    looseMap[tracksterId];
+
+                if (truthMatches.empty())
+                    continue;
+
+
+                double bestScore = 2.;
+                //uint32_t bestTruthPi = 0;
+                //double bestSharedE = 0.;
+
+                for (auto const& match : truthMatches){
+
+                    const uint32_t truthId = match.index();
+                    const double score = match.score();
+                    const double shared = match.value();
+
+                    auto const& truthParticle = graph.particle(truthId);
+
+                    if (!truthParticle.valid())
+                        continue;
+
+                    if (std::abs(truthParticle.pdgId()) != 211)
+                        continue;
+
+                    if (!(truthParticle.hasAncestorPdgId(15) ||
+                        truthParticle.hasAncestorPdgId(-15)))
+                        continue;
+
+                    const double absEta =
+                        std::abs(truthParticle.momentum().eta());
+
+                    if (absEta < 1.5 || absEta > 3.0)
+                        continue;
+                    
+
+                    if (score < bestScore){
+                        bestScore = score;
+                        //bestSharedE = match.value();
+                        //bestTruthPi = match.index();
+                    }
+
+            }
+            histContainer_["TrackesterToPionBestMatchLoose"]->Fill(bestScore);
+        }
    }//doTenTau
 
    if(doDYtoLL)
@@ -488,6 +905,22 @@ void MyTruthAnalyzer::endJob() {
         std::cout << "Tau--->5prong + 0pi0 = " << totTauTo5Prg0Pi0 << " | " << "BF = " << std::fixed << std::setprecision(3) << totTauTo5Prg0Pi0*1.0/totTau << std::endl;
         std::cout << "Tau--->1eta + 1kstar = " << totTauTo1Eta1Kstar << " | " << "BF = " << std::fixed << std::setprecision(3) << totTauTo1Eta1Kstar*1.0/totTau << std::endl;
         std::cout << "Tau--->other = " << totTauToOther << " | " << "BF = " << std::fixed << std::setprecision(3) << totTauToOther*1.0/totTau << std::endl;
+
+        histContainer_["TruthToRecoEfficiency"]->Divide(
+        histContainer_["TruthPionPtMatched"],
+        histContainer_["TruthPionPtAll"],
+        1.0,
+        1.0,
+        "B"
+    );
+
+        histContainer_["RecoToTruthEfficiency"]->Divide(
+        histContainer_["TracksterPtMatched"],
+        histContainer_["TracksterPtAll"],
+        1.0,
+        1.0,
+        "B"
+    );
     }
 
     if(doDYtoLL)
@@ -501,6 +934,7 @@ void MyTruthAnalyzer::endJob() {
         std::cout << "Z--->not2leptons = " << totZToNot2Leptons << " | " << "BF = " << std::fixed << std::setprecision(3) << totZToNot2Leptons*1.0/totZ << std::endl;
         std::cout << "Z--->1 particle = " << totZTo1Particle << " | " << "BF = " << std::fixed << std::setprecision(3) << totZTo1Particle*1.0/totZ << std::endl;
 
+        std::cout << match0t2/allmatched << "% Has Matching Score Lower than 0.2" << std::endl;
     }
 }
 

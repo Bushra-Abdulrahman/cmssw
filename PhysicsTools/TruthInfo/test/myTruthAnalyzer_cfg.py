@@ -14,7 +14,7 @@ process.maxEvents = cms.untracked.PSet(
 process.source = cms.Source(
     "PoolSource",
     fileNames=cms.untracked.vstring(
-        "file:step3.root"
+        "file:/eos/user/b/balmutra/tentau/step3.root"
         #"file:34044.88_DYToLL_M_50_14TeV+Run4D120_enableTruth/step3.root"
     )
 )
@@ -29,6 +29,26 @@ process.myTruthAnalyzer = cms.EDAnalyzer(
     "MyTruthAnalyzer",
     src = cms.InputTag("truthLogicalGraphProducer"),
     hitIndex = cms.InputTag("truthLogicalGraphHitIndexProducer"),
+    tracksters     = cms.InputTag("ticlCandidate"),
+    truthToTrackster = cms.InputTag(
+        "truthBranchTracksterAssociators",
+        "ticlCandidateTruthToReco" # be careful, this has two directions: ticlCandidateTruthToReco and ticlCandidateRecoToTruthFixed (or Adaptive)
+    ),
+    tracksterToTruthAdaptiveNominal = cms.InputTag(
+    "truthBranchTracksterAssociators",
+    "ticlCandidateRecoToTruthAdaptiveNominal"
+    ),
+
+    tracksterToTruthAdaptiveTight = cms.InputTag(
+    "truthBranchTracksterAssociators",
+    "ticlCandidateRecoToTruthAdaptiveTight"
+    ),
+
+    tracksterToTruthAdaptiveLoose = cms.InputTag(
+    "truthBranchTracksterAssociators",
+    "ticlCandidateRecoToTruthAdaptiveLoose"
+    ),
+
     hgcalRecHits = cms.VInputTag(
         cms.InputTag("HGCalRecHit", "HGCEERecHits"),
         cms.InputTag("HGCalRecHit", "HGCHEFRecHits"),
